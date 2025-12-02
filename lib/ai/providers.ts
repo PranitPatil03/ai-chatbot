@@ -1,10 +1,13 @@
-import { gateway } from "@ai-sdk/gateway";
+import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 import {
   customProvider,
   extractReasoningMiddleware,
   wrapLanguageModel,
 } from "ai";
 import { isTestEnvironment } from "../constants";
+
+export const defaultModel = anthropic("claude-sonnet-4-20250514");
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -25,12 +28,12 @@ export const myProvider = isTestEnvironment
     })()
   : customProvider({
       languageModels: {
-        "chat-model": gateway.languageModel("xai/grok-2-vision-1212"),
+        "chat-model": anthropic("claude-sonnet-4-20250514"),
         "chat-model-reasoning": wrapLanguageModel({
-          model: gateway.languageModel("xai/grok-3-mini"),
+          model: anthropic("claude-3-5-sonnet-20241022"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
-        "title-model": gateway.languageModel("xai/grok-2-1212"),
-        "artifact-model": gateway.languageModel("xai/grok-2-1212"),
+        "title-model": anthropic("claude-3-5-haiku-20241022"),
+        "artifact-model": google("gemini-2.0-flash-exp"),
       },
     });
