@@ -1,4 +1,3 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import {
   customProvider,
@@ -7,7 +6,7 @@ import {
 } from "ai";
 import { isTestEnvironment } from "../constants";
 
-export const defaultModel = anthropic("claude-sonnet-4-20250514");
+export const defaultModel = google("gemini-2.5-pro");
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -28,12 +27,12 @@ export const myProvider = isTestEnvironment
     })()
   : customProvider({
       languageModels: {
-        "chat-model": anthropic("claude-sonnet-4-20250514"),
+        "chat-model": google("gemini-2.5-pro"),
         "chat-model-reasoning": wrapLanguageModel({
-          model: anthropic("claude-3-5-sonnet-20241022"),
+          model: google("gemini-2.5-pro"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
-        "title-model": anthropic("claude-3-5-haiku-20241022"),
+        "title-model": google("gemini-2.5-pro"),
         "artifact-model": google("gemini-2.0-flash-exp"),
       },
     });

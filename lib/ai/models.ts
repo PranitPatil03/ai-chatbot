@@ -9,13 +9,13 @@ export type ChatModel = {
 export const chatModels: ChatModel[] = [
   {
     id: "chat-model",
-    name: "Claude Sonnet 4",
-    description: "Advanced multimodal model with vision and text capabilities",
+    name: "Gemini 2.5 Pro",
+    description: "Latest Google Pro model optimized for multimodal depth",
   },
   {
     id: "chat-model-reasoning",
-    name: "Claude Sonnet 3.5 Reasoning",
+    name: "Gemini 2.5 Pro (Reasoning)",
     description:
-      "Uses advanced chain-of-thought reasoning for complex problems",
+      "Adds structured reasoning traces for complex, multi-step problems",
   },
 ];
