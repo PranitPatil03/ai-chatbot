@@ -179,12 +179,13 @@ function PureMultimodalInput({
 
       if (response.ok) {
         const data = await response.json();
-        const { url, pathname, contentType } = data;
+        const { url, pathname, contentType, originalFilename } = data;
+        const displayName = originalFilename ?? pathname;
 
         return {
           url,
-          name: pathname,
-          contentType,
+          name: displayName,
+          contentType: contentType ?? file.type ?? "application/octet-stream",
         };
       }
       const { error } = await response.json();

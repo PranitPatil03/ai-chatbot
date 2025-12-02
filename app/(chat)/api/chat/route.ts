@@ -39,6 +39,7 @@ import {
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
+import { getRedisClients } from "@/lib/redis";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -68,13 +69,16 @@ const getTokenlensCatalog = cache(
 export function getStreamContext() {
   if (!globalStreamContext) {
     try {
+      const { publisher, subscriber } = getRedisClients();
       globalStreamContext = createResumableStreamContext({
         waitUntil: after,
+        publisher,
+        subscriber,
       });
     } catch (error: any) {
       if (error.message.includes("REDIS_URL")) {
         console.log(
-          " > Resumable streams are disabled due to missing REDIS_URL"
+          " > Resumable streams are disabled because Redis is not configured"
         );
       } else {
         console.error(error);
