@@ -22,13 +22,19 @@ export async function generateTitleFromUserMessage({
 }: {
   message: UIMessage;
 }) {
-  const { text: title } = await generateText({
-    model: myProvider.languageModel("title-model"),
-    system: titlePrompt,
-    prompt: getTextFromMessage(message),
-  });
+  try {
+    const { text: title } = await generateText({
+      model: myProvider.languageModel("title-model"),
+      system: titlePrompt,
+      prompt: getTextFromMessage(message),
+    });
 
-  return title;
+    return title;
+  } catch (error) {
+    // Fallback to a simple title if generation fails
+    const text = getTextFromMessage(message);
+    return text.slice(0, 50) || "New Chat";
+  }
 }
 
 export async function deleteTrailingMessages({ id }: { id: string }) {

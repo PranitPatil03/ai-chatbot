@@ -23,6 +23,7 @@ import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { executeNotebook } from "@/lib/ai/tools/execute-notebook";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
@@ -94,8 +95,10 @@ export async function POST(request: Request) {
 
   try {
     const json = await request.json();
+    console.log("📥 Received request body:", JSON.stringify(json, null, 2));
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+  } catch (error) {
+    console.error("❌ Request validation failed:", error);
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
@@ -196,6 +199,7 @@ export async function POST(request: Request) {
                   "createDocument",
                   "updateDocument",
                   "requestSuggestions",
+                  "executeNotebook",
                 ],
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
@@ -206,6 +210,7 @@ export async function POST(request: Request) {
               session,
               dataStream,
             }),
+            executeNotebook: executeNotebook({ session, dataStream }),
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,

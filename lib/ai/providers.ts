@@ -6,7 +6,7 @@ import {
 } from "ai";
 import { isTestEnvironment } from "../constants";
 
-export const defaultModel = google("gemini-2.5-pro");
+export const defaultModel = google("gemini-pro");
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -27,12 +27,12 @@ export const myProvider = isTestEnvironment
     })()
   : customProvider({
       languageModels: {
-        "chat-model": google("gemini-2.5-pro"),
+        "chat-model": google("gemini-pro"),
         "chat-model-reasoning": wrapLanguageModel({
-          model: google("gemini-2.5-pro"),
+          model: google("gemini-pro"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
-        "title-model": google("gemini-2.5-pro"),
-        "artifact-model": google("gemini-2.0-flash-exp"),
+        "title-model": google("gemini-pro"),
+        "artifact-model": google("gemini-pro"),
       },
     });

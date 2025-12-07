@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    flask \
+    flask-cors \
+    numpy \
+    pandas \
+    matplotlib \
+    seaborn \
+    scikit-learn \
+    scipy
+
+# Copy the server script
+COPY jupyter_server.py /app/
+
+# Expose port
+EXPOSE 8888
+
+# Run the server
+CMD ["python", "jupyter_server.py"]
