@@ -1,6 +1,7 @@
 import type { UIMessageStreamWriter } from "ai";
 import type { Session } from "next-auth";
 import { codeDocumentHandler } from "@/artifacts/code/server";
+import { notebookDocumentHandler } from "@/artifacts/notebook/server";
 import { sheetDocumentHandler } from "@/artifacts/sheet/server";
 import { textDocumentHandler } from "@/artifacts/text/server";
 import type { ArtifactKind } from "@/components/artifact";
@@ -14,6 +15,7 @@ export type SaveDocumentProps = {
   kind: ArtifactKind;
   content: string;
   userId: string;
+  fileUrls?: Array<{ name: string; url: string }>;
 };
 
 export type CreateDocumentCallbackProps = {
@@ -21,6 +23,8 @@ export type CreateDocumentCallbackProps = {
   title: string;
   dataStream: UIMessageStreamWriter<ChatMessage>;
   session: Session;
+  messages?: ChatMessage[]; // Optional: sanitized messages with file URLs
+  fileUrls?: Array<{ name: string; url: string }>; // Optional: file URLs to save with document
 };
 
 export type UpdateDocumentCallbackProps = {
@@ -38,26 +42,28 @@ export type DocumentHandler<T = ArtifactKind> = {
 
 export function createDocumentHandler<T extends ArtifactKind>(config: {
   kind: T;
-  onCreateDocument: (params: CreateDocumentCallbackProps) => Promise<string>;
+  onCreateDocument: (params: CreateDocumentCallbackProps) => Promise<{ content: string; fileUrls?: Array<{ name: string; url: string }> }>;
   onUpdateDocument: (params: UpdateDocumentCallbackProps) => Promise<string>;
 }): DocumentHandler<T> {
   return {
     kind: config.kind,
     onCreateDocument: async (args: CreateDocumentCallbackProps) => {
-      const draftContent = await config.onCreateDocument({
+      const result = await config.onCreateDocument({
         id: args.id,
         title: args.title,
         dataStream: args.dataStream,
         session: args.session,
+        messages: args.messages, // ✅ Pass messages through!
       });
 
       if (args.session?.user?.id) {
         await saveDocument({
           id: args.id,
           title: args.title,
-          content: draftContent,
+          content: result.content,
           kind: config.kind,
           userId: args.session.user.id,
+          fileUrls: result.fileUrls, // ✅ Save file URLs!
         });
       }
 
@@ -93,6 +99,7 @@ export const documentHandlersByArtifactKind: DocumentHandler[] = [
   textDocumentHandler,
   codeDocumentHandler,
   sheetDocumentHandler,
+  notebookDocumentHandler,
 ];
 
-export const artifactKinds = ["text", "code", "sheet"] as const;
+export const artifactKinds = ["text", "code", "sheet", "notebook"] as const;

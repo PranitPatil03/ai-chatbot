@@ -43,6 +43,7 @@ import { getRedisClients } from "@/lib/redis";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { sanitizeMessagesForAI } from "@/lib/utils/message-sanitizer";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -181,12 +182,16 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
+    // Sanitize messages to convert non-image file parts to text descriptions
+    // This is necessary because Claude API doesn't support arbitrary file uploads
+    const sanitizedMessages = sanitizeMessagesForAI(uiMessages);
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
-          messages: convertToModelMessages(uiMessages),
+          messages: convertToModelMessages(sanitizedMessages),
           stopWhen: stepCountIs(5),
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"
@@ -200,7 +205,7 @@ export async function POST(request: Request) {
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
-            createDocument: createDocument({ session, dataStream }),
+            createDocument: createDocument({ session, dataStream, messages: sanitizedMessages }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({
               session,

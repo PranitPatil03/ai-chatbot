@@ -314,12 +314,14 @@ export async function saveDocument({
   kind,
   content,
   userId,
+  fileUrls,
 }: {
   id: string;
   title: string;
   kind: ArtifactKind;
   content: string;
   userId: string;
+  fileUrls?: Array<{ name: string; url: string }>;
 }) {
   try {
     return await db
@@ -330,6 +332,7 @@ export async function saveDocument({
         kind,
         content,
         userId,
+        fileUrls: fileUrls || null,
         createdAt: new Date(),
       })
       .returning();

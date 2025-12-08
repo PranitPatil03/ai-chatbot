@@ -30,11 +30,33 @@ export type ChatTools = {
   requestSuggestions: requestSuggestionsTool;
 };
 
+export type NotebookExecution = {
+  success: boolean;
+  error?: string;
+  logs: {
+    stdout: string[];
+    stderr: string[];
+  };
+  results: Array<{
+    text?: string;
+    html?: string;
+    png?: string;
+    jpeg?: string;
+    svg?: string;
+    pdf?: string;
+    json?: any;
+    javascript?: string;
+    [key: string]: any;
+  }>;
+};
+
 export type CustomUIDataTypes = {
   textDelta: string;
   imageDelta: string;
   sheetDelta: string;
   codeDelta: string;
+  notebookDelta: string;
+  notebookExecution: NotebookExecution;
   suggestion: Suggestion;
   appendMessage: string;
   id: string;
