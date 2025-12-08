@@ -1,8 +1,10 @@
 import { createClient, type RedisClientType } from "redis";
 
+type RedisClient = ReturnType<typeof createClient>;
+
 type RedisClients = {
-  publisher: RedisClientType;
-  subscriber: RedisClientType;
+  publisher: RedisClient;
+  subscriber: RedisClient;
 };
 
 let redisClients: RedisClients | null = null;
@@ -28,7 +30,7 @@ const resolveRedisUrl = () => {
   return redisUrl;
 };
 
-const attachErrorLogging = (client: RedisClientType, label: string) => {
+const attachErrorLogging = (client: RedisClient, label: string) => {
   client.on("error", (error) => {
     console.error(`[redis:${label}]`, error);
   });
