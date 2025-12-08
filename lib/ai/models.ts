@@ -9,12 +9,12 @@ export type ChatModel = {
 export const chatModels: ChatModel[] = [
   {
     id: "chat-model",
-    name: "Gemini 2.5 Pro",
-    description: "Latest Google Pro model optimized for multimodal depth",
+    name: "Claude Sonnet 4",
+    description: "Anthropic's smart model for complex agents and coding tasks",
   },
   {
     id: "chat-model-reasoning",
-    name: "Gemini 2.5 Pro (Reasoning)",
+    name: "Claude Sonnet 4 (Reasoning)",
     description:
       "Adds structured reasoning traces for complex, multi-step problems",
   },
