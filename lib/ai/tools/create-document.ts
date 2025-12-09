@@ -11,9 +11,10 @@ import { generateUUID } from "@/lib/utils";
 type CreateDocumentProps = {
   session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
+  chatId?: string;
 };
 
-export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
+export const createDocument = ({ session, dataStream, chatId }: CreateDocumentProps) =>
   tool({
     description:
       "Create a document for a writing or content creation activities. This tool will call other functions that will generate the contents of the document based on the title and kind.",
@@ -22,7 +23,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       kind: z.enum(artifactKinds),
     }),
     execute: async ({ title, kind }) => {
-      console.log('[CreateDocument Tool] Called with:', { title, kind });
+      console.log('[CreateDocument Tool] Called with:', { title, kind, chatId });
       
       const id = generateUUID();
       console.log('[CreateDocument Tool] Generated ID:', id);
@@ -67,6 +68,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
         title,
         dataStream,
         session,
+        chatId,
       });
 
       dataStream.write({ type: "data-finish", data: null, transient: true });

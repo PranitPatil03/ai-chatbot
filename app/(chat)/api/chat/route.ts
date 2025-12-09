@@ -312,7 +312,7 @@ Use pandas.read_csv() or pandas.read_excel() to load it for analysis.`
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
-            createDocument: createDocument({ session, dataStream }),
+            createDocument: createDocument({ session, dataStream, chatId: id }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({
               session,

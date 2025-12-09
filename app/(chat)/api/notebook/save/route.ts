@@ -26,30 +26,41 @@ export async function POST(request: NextRequest) {
       chatId,
       documentId,
       cellCount: cells.length,
+      hasOutputs: cells.some((c: any) => c.outputs && c.outputs.length > 0),
+      cellsPreview: cells.map((c: any) => ({
+        id: c.id,
+        hasContent: !!c.content,
+        hasOutputs: !!(c.outputs && c.outputs.length > 0),
+        outputCount: c.outputs?.length || 0
+      }))
     });
 
-    // Save notebook with cells (including outputs) to document table
-    // The content is already in the XML format expected by the artifact system
-    const cellsXML = cells
-      .map((cell: any) => {
-        const outputs = cell.outputs
-          ? `\n<!-- Outputs: ${JSON.stringify(cell.outputs)} -->`
-          : '';
-        return `<VSCode.Cell id="${cell.id}" language="${cell.type === 'code' ? 'python' : 'markdown'}">${outputs}\n${cell.content}\n</VSCode.Cell>`;
-      })
-      .join('\n\n');
+    // Save notebook with cells (including outputs) as JSON
+    // This format matches what the client expects when loading
+    const content = JSON.stringify(cells);
+    
+    console.log('[Notebook Save] Content to save:', {
+      contentLength: content.length,
+      contentPreview: content.substring(0, 300)
+    });
 
     // Update the document with the new content including outputs
     if (documentId) {
-      await saveDocument({
+      const result = await saveDocument({
         id: documentId,
         title: 'Data Analysis',
         kind: 'notebook',
-        content: cellsXML,
+        content: content,
         userId: session.user.id,
       });
 
-      console.log('[Notebook Save] Document updated successfully');
+      console.log('[Notebook Save] Document saved successfully:', {
+        documentId,
+        saved: !!result,
+        cellsSaved: cells.length
+      });
+    } else {
+      console.warn('[Notebook Save] No documentId provided, cannot save');
     }
 
     return NextResponse.json({

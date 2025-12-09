@@ -81,19 +81,21 @@ const useNotebookStore = create<NotebookStore>((set) => ({
 function CellOutput({ output }: { output: NotebookOutput }) {
   if (output.type === 'text') {
     return (
-      <pre className="text-sm font-mono whitespace-pre-wrap bg-muted/30 p-3 rounded-md overflow-x-auto">
-        {output.content}
-      </pre>
+      <div className="bg-muted/20 border border-muted rounded-md overflow-hidden">
+        <pre className="text-sm font-mono whitespace-pre-wrap p-3 overflow-x-auto">
+          {output.content}
+        </pre>
+      </div>
     );
   }
   
   if (output.type === 'image') {
     return (
-      <div className="rounded-md overflow-hidden border">
+      <div className="rounded-md overflow-hidden border border-muted bg-white dark:bg-gray-900 p-2">
         <img 
           src={`data:${output.mimeType};base64,${output.content}`}
           alt="Output visualization"
-          className="max-w-full h-auto"
+          className="max-w-full h-auto mx-auto"
         />
       </div>
     );
@@ -114,8 +116,8 @@ function CellOutput({ output }: { output: NotebookOutput }) {
   
   if (output.type === 'table') {
     return (
-      <div className="overflow-x-auto border rounded-md">
-        <pre className="text-sm font-mono p-3 bg-muted/30">
+      <div className="overflow-x-auto border border-muted rounded-md bg-muted/20">
+        <pre className="text-sm font-mono p-3">
           {output.content}
         </pre>
       </div>
@@ -135,25 +137,7 @@ const NotebookCellComponent = memo(({
   onExecute: (cellId: string) => void;
   isExecuting: boolean;
 }) => {
-  const { updateCell, deleteCell } = useNotebookStore();
   const [isHovered, setIsHovered] = useState(false);
-  
-  const handleContentChange = (content: string) => {
-    updateCell(cell.id, { content });
-  };
-  
-  const handleExecute = () => {
-    if (!isExecuting && cell.content.trim()) {
-      onExecute(cell.id);
-    }
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleExecute();
-    }
-  };
   
   const statusIcon = {
     idle: null,
@@ -168,49 +152,31 @@ const NotebookCellComponent = memo(({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex gap-2 p-4">
+      <div className="flex gap-3 p-4">
         {/* Execution Count / Status */}
-        <div className="flex flex-col items-center gap-2 w-12 shrink-0">
-          <div className="text-xs text-muted-foreground font-mono">
+        <div className="flex flex-col items-center gap-2 w-14 shrink-0 pt-1">
+          <div className="text-xs text-muted-foreground font-mono font-semibold">
             {cell.executionCount ? `[${cell.executionCount}]` : '[ ]'}
           </div>
           {statusIcon}
         </div>
         
         {/* Cell Content */}
-        <div className="flex-1 space-y-2">
-          {/* Code Input */}
+        <div className="flex-1 space-y-3">
+          {/* Code Display (Read-only) */}
           <div className="relative">
-            <textarea
-              value={cell.content}
-              onChange={(e) => handleContentChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="# Write Python code here... (Cmd/Ctrl+Enter to run)"
-              className="w-full min-h-[100px] p-3 font-mono text-sm bg-muted/30 border rounded-md resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isExecuting}
-            />
-            
-            {/* Execute Button */}
-            {(isHovered || cell.status === 'running') && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="absolute top-2 right-2"
-                onClick={handleExecute}
-                disabled={isExecuting || !cell.content || !cell.content.trim()}
-              >
-                {cell.status === 'running' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-              </Button>
-            )}
+            <div className="absolute top-2 right-2 text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+              Python
+            </div>
+            <pre className="w-full min-h-20 p-3 pt-8 font-mono text-sm bg-muted/30 border rounded-md overflow-x-auto whitespace-pre-wrap wrap-break-word">
+              {cell.content || '# No code'}
+            </pre>
           </div>
           
           {/* Cell Outputs */}
           {cell.outputs && cell.outputs.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 pl-2 border-l-2 border-blue-200 dark:border-blue-800">
+              <div className="text-xs text-muted-foreground font-semibold mb-1">Output:</div>
               {cell.outputs.map((output, idx) => (
                 <CellOutput key={idx} output={output} />
               ))}
@@ -219,14 +185,16 @@ const NotebookCellComponent = memo(({
           
           {/* Execution Time */}
           {cell.executionTime !== undefined && (
-            <div className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-3 w-3" />
               Executed in {cell.executionTime}ms
             </div>
           )}
           
           {/* Error Message */}
           {cell.error && (
-            <div className="text-sm text-red-600 dark:text-red-400">
+            <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 p-2 rounded-md">
+              <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
               {cell.error}
             </div>
           )}
@@ -248,14 +216,15 @@ export function NotebookArtifactComponent({
   isStreaming: boolean;
   onExecute?: (cellId: string, code: string) => Promise<void>;
 }) {
-  const { cells, setCells, isExecuting, setIsExecuting, sessionStatus, errorMessage, addCell } = useNotebookStore();
+  const { cells, setCells, isExecuting, setIsExecuting, sessionStatus, errorMessage } = useNotebookStore();
   
   // Parse content on mount or when content changes
   useEffect(() => {
     console.log('[Notebook Client] Content received:', {
       length: content?.length,
       isEmpty: !content,
-      preview: content?.substring(0, 100)
+      preview: content?.substring(0, 200),
+      fullContent: content
     });
 
     if (!content || content.trim() === '') {
@@ -273,13 +242,21 @@ export function NotebookArtifactComponent({
 
     try {
       const parsed = JSON.parse(content);
-      console.log('[Notebook Client] Parsed successfully:', {
+      console.log('[Notebook Client] Parsed JSON successfully:', {
         isArray: Array.isArray(parsed),
-        cellCount: Array.isArray(parsed) ? parsed.length : 0
+        cellCount: Array.isArray(parsed) ? parsed.length : 0,
+        firstCell: Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null
       });
       
       if (Array.isArray(parsed) && parsed.length > 0) {
-        setCells(parsed);
+        // Ensure all cells have the proper structure
+        const validCells = parsed.map((cell: any) => ({
+          ...cell,
+          status: cell.status || 'idle',
+          type: cell.type || 'code',
+        }));
+        console.log('[Notebook Client] Setting cells:', validCells);
+        setCells(validCells);
       } else {
         console.warn('[Notebook Client] Parsed but not a valid array, using default');
         setCells([
@@ -292,8 +269,8 @@ export function NotebookArtifactComponent({
         ]);
       }
     } catch (error) {
-      console.error('[Notebook Client] Failed to parse notebook content:', error);
-      console.error('[Notebook Client] Invalid content:', content);
+      console.error('[Notebook Client] Failed to parse JSON:', error);
+      console.error('[Notebook Client] Content that failed to parse:', content);
       // Initialize with empty cell if parsing fails
       if (cells.length === 0) {
         setCells([
@@ -323,36 +300,32 @@ export function NotebookArtifactComponent({
     }
   };
   
-  const handleAddCell = () => {
-    addCell(cells[cells.length - 1]?.id);
-  };
-  
   return (
     <div className="flex flex-col h-full">
       {/* Notebook Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2">
-          <div className="text-sm font-medium">Data Analysis Notebook</div>
+      <div className="flex items-center justify-between p-4 border-b bg-linear-to-r from-muted/50 to-muted/30">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              <path d="M9 12h6m-6 4h6" />
+            </svg>
+            <div className="text-sm font-semibold">Data Analysis Notebook</div>
+          </div>
           <div className={cn(
-            "text-xs px-2 py-0.5 rounded-full",
+            "text-xs px-2.5 py-1 rounded-full font-medium",
             sessionStatus === 'ready' && "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
             sessionStatus === 'initializing' && "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
             sessionStatus === 'error' && "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400",
             sessionStatus === 'idle' && "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400"
           )}>
-            {sessionStatus}
+            {sessionStatus === 'ready' ? '● Ready' : sessionStatus === 'initializing' ? '● Initializing' : sessionStatus === 'error' ? '● Error' : 'Idle'}
           </div>
         </div>
         
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleAddCell}
-          disabled={isExecuting}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Add Cell
-        </Button>
+        <div className="text-xs text-muted-foreground">
+          {cells.length} {cells.length === 1 ? 'cell' : 'cells'} • Read-only
+        </div>
       </div>
       
       {/* Error Banner */}
@@ -370,11 +343,7 @@ export function NotebookArtifactComponent({
         {cells.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center">
-              <p className="text-sm mb-2">No cells yet</p>
-              <Button size="sm" variant="outline" onClick={handleAddCell}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add Cell
-              </Button>
+              <p className="text-sm">No cells available</p>
             </div>
           </div>
         ) : (
@@ -436,113 +405,9 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
     }
   },
   content: ({ content, status, metadata, setMetadata }) => {
-    // Auto-execute all cells when notebook is created
-    const { useEffect } = require('react');
-    const hasAutoExecuted = require('react').useRef(false);
-    
-    useEffect(() => {
-      // Auto-execute once when streaming finishes and we have cells
-      if (status === 'idle' && !hasAutoExecuted.current && metadata.chatId) {
-        const { cells } = useNotebookStore.getState();
-        const codeCells = cells.filter(c => c.type === 'code' && c.content.trim());
-        
-        if (codeCells.length > 0) {
-          hasAutoExecuted.current = true;
-          console.log('[Notebook] Auto-executing all cells individually on creation');
-          
-          // Execute all cells individually to capture outputs per cell
-          setTimeout(async () => {
-            const { setIsExecuting, updateCell, setSessionStatus, setErrorMessage } = useNotebookStore.getState();
-            
-            setIsExecuting(true);
-            setSessionStatus('initializing');
-            
-            try {
-              // Execute cells one by one to capture individual outputs
-              for (let idx = 0; idx < codeCells.length; idx++) {
-                const cell = codeCells[idx];
-                
-                console.log(`[Notebook] Auto-executing cell ${idx + 1}/${codeCells.length}: ${cell.id}`);
-                
-                // Update cell status to running
-                updateCell(cell.id, { 
-                  status: 'running',
-                  error: undefined,
-                  outputs: undefined,
-                });
-                
-                const response = await fetch('/api/jupyter/execute', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    chatId: metadata.chatId,
-                    code: cell.content,
-                  }),
-                });
-                
-                if (!response.ok) {
-                  throw new Error(`Cell ${idx + 1} execution failed`);
-                }
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                  const outputs: NotebookOutput[] = [];
-                  
-                  if (result.results) {
-                    for (const execResult of result.results) {
-                      if (execResult.text) {
-                        outputs.push({ type: 'text', content: execResult.text });
-                      }
-                      if (execResult.png) {
-                        outputs.push({ type: 'image', content: execResult.png, mimeType: 'image/png' });
-                      }
-                      if (execResult.error) {
-                        outputs.push({ type: 'error', content: execResult.error.name + ': ' + execResult.error.value });
-                      }
-                    }
-                  }
-                  
-                  updateCell(cell.id, {
-                    status: 'success',
-                    executionCount: idx + 1,
-                    outputs: outputs.length > 0 ? outputs : undefined,
-                    executionTime: result.executionTime,
-                  });
-                } else {
-                  updateCell(cell.id, {
-                    status: 'error',
-                    error: result.error || 'Execution failed',
-                  });
-                }
-              }
-              
-              setSessionStatus('ready');
-              console.log('[Notebook] Auto-execution complete');
-              
-              // Save notebook state to database after execution
-              const { cells: updatedCells } = useNotebookStore.getState();
-              await fetch('/api/notebook/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chatId: metadata.chatId,
-                  documentId: metadata.documentId,
-                  cells: updatedCells,
-                }),
-              });
-              
-            } catch (error) {
-              console.error('[Notebook] Auto-execution error:', error);
-              setSessionStatus('error');
-              setErrorMessage(error instanceof Error ? error.message : 'Auto-execution failed');
-            } finally {
-              setIsExecuting(false);
-            }
-          }, 500);
-        }
-      }
-    }, [status, metadata.chatId, metadata.documentId]);
+    // Cells are now executed server-side before streaming to client
+    // No need for client-side auto-execution
+    console.log('[Notebook] Cells received with outputs already populated from server');
     
     const handleExecute = async (cellId: string, code: string) => {
       console.log('[Notebook] Execute cell:', { cellId, code: code.substring(0, 100) });
@@ -575,7 +440,13 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
         }
         
         const result = await response.json();
-        console.log('[Notebook] Execution result:', result);
+        console.log('[Notebook] Execution result:', {
+          success: result.success,
+          hasResults: !!result.results,
+          resultCount: result.results?.length || 0,
+          executionTime: result.executionTime,
+          error: result.error
+        });
         
         setSessionStatus('ready');
         
@@ -583,8 +454,17 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
           // Process execution results
           const outputs: NotebookOutput[] = [];
           
-          if (result.results) {
+          if (result.results && Array.isArray(result.results)) {
+            console.log('[Notebook] Processing', result.results.length, 'execution results');
+            
             for (const execResult of result.results) {
+              console.log('[Notebook] Result item:', {
+                hasText: !!execResult.text,
+                hasPng: !!execResult.png,
+                hasError: !!execResult.error,
+                textLength: execResult.text?.length || 0
+              });
+              
               // Text output
               if (execResult.text) {
                 outputs.push({
@@ -610,15 +490,28 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
                 });
               }
             }
+          } else {
+            console.warn('[Notebook] No results array in execution response');
           }
           
+          console.log('[Notebook] Total outputs collected:', outputs.length);
+          
           // Update cell with results
-          updateCell(cellId, {
-            status: 'success',
-            outputs: outputs,
+          const updatedCell = {
+            status: 'success' as const,
+            outputs: outputs.length > 0 ? outputs : undefined,
             executionTime: result.executionTime,
             executionCount: (useNotebookStore.getState().cells.find(c => c.id === cellId)?.executionCount || 0) + 1,
+          };
+          
+          console.log('[Notebook] Updating cell with:', {
+            cellId,
+            status: updatedCell.status,
+            outputCount: outputs.length,
+            executionCount: updatedCell.executionCount
           });
+          
+          updateCell(cellId, updatedCell);
           
           // Update metadata with session info
           if (result.sandboxId && !metadata.sessionId) {
@@ -630,6 +523,8 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
           
           // Save notebook state after execution
           const { cells: updatedCells } = useNotebookStore.getState();
+          console.log('[Notebook] Saving notebook state with', updatedCells.length, 'cells');
+          
           fetch('/api/notebook/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -638,6 +533,12 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
               documentId: metadata.documentId,
               cells: updatedCells,
             }),
+          }).then(res => {
+            if (res.ok) {
+              console.log('[Notebook] State saved successfully');
+            } else {
+              console.error('[Notebook] Failed to save state:', res.status);
+            }
           }).catch(err => console.error('[Notebook] Failed to save after execution:', err));
           
         } else {
@@ -785,53 +686,78 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
       label: "Download",
-      description: "Download as Jupyter Notebook",
+      description: "Download as Jupyter Notebook (.ipynb) with outputs",
       onClick: async ({ content, metadata }) => {
-        console.log('[Notebook] Downloading as .ipynb');
+        console.log('[Notebook] Downloading as .ipynb with outputs');
         
         const { cells } = useNotebookStore.getState();
         
-        // Convert to .ipynb format
+        // Convert to .ipynb format with proper output formatting
         const notebook = {
-          cells: cells.map(cell => ({
-            cell_type: cell.type === 'code' ? 'code' : 'markdown',
-            execution_count: cell.executionCount || null,
-            metadata: {},
-            outputs: cell.outputs?.map(output => {
-              if (output.type === 'text') {
-                return {
-                  output_type: 'stream',
-                  name: 'stdout',
-                  text: [output.content]
-                };
-              } else if (output.type === 'image') {
-                return {
-                  output_type: 'display_data',
-                  data: {
-                    'image/png': output.content
-                  },
-                  metadata: {}
-                };
-              } else if (output.type === 'error') {
-                return {
-                  output_type: 'error',
-                  ename: 'Error',
-                  evalue: output.content,
-                  traceback: [output.content]
-                };
+          cells: cells.map(cell => {
+            const cellData: any = {
+              cell_type: cell.type === 'code' ? 'code' : 'markdown',
+              metadata: {},
+              source: cell.content.split('\n')
+            };
+            
+            if (cell.type === 'code') {
+              cellData.execution_count = cell.executionCount || null;
+              cellData.outputs = [];
+              
+              if (cell.outputs && cell.outputs.length > 0) {
+                for (const output of cell.outputs) {
+                  if (output.type === 'text') {
+                    cellData.outputs.push({
+                      output_type: 'stream',
+                      name: 'stdout',
+                      text: output.content.split('\n')
+                    });
+                  } else if (output.type === 'image') {
+                    cellData.outputs.push({
+                      output_type: 'display_data',
+                      data: {
+                        'image/png': output.content
+                      },
+                      metadata: {}
+                    });
+                  } else if (output.type === 'error') {
+                    const errorLines = output.content.split('\n');
+                    cellData.outputs.push({
+                      output_type: 'error',
+                      ename: 'Error',
+                      evalue: errorLines[0] || 'Error',
+                      traceback: errorLines
+                    });
+                  } else if (output.type === 'table') {
+                    cellData.outputs.push({
+                      output_type: 'stream',
+                      name: 'stdout',
+                      text: output.content.split('\n')
+                    });
+                  }
+                }
               }
-              return null;
-            }).filter(Boolean) || [],
-            source: [cell.content]
-          })),
+            }
+            
+            return cellData;
+          }),
           metadata: {
             kernelspec: {
-              display_name: 'Python 3',
+              display_name: 'Python 3 (ipykernel)',
               language: 'python',
               name: 'python3'
             },
             language_info: {
+              codemirror_mode: {
+                name: 'ipython',
+                version: 3
+              },
+              file_extension: '.py',
+              mimetype: 'text/x-python',
               name: 'python',
+              nbconvert_exporter: 'python',
+              pygments_lexer: 'ipython3',
               version: '3.10.0'
             }
           },
@@ -844,13 +770,13 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'analysis.ipynb';
+        a.download = `data-analysis-${Date.now()}.ipynb`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        console.log('[Notebook] Download complete');
+        console.log('[Notebook] Download complete with', cells.length, 'cells and outputs');
       },
     },
   ],
