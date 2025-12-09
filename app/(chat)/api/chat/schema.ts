@@ -7,7 +7,32 @@ const textPartSchema = z.object({
 
 const filePartSchema = z.object({
   type: z.enum(["file"]),
-  mediaType: z.enum(["image/jpeg", "image/png"]),
+  mediaType: z.enum([
+    // Images
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    // Excel
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+    "application/vnd.ms-excel", // .xls
+    // CSV
+    "text/csv",
+    // PDF
+    "application/pdf",
+    // Word
+    "application/msword", // .doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+    // PowerPoint
+    "application/vnd.ms-powerpoint", // .ppt
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+    // Text
+    "text/plain",
+    // Outlook
+    "application/vnd.ms-outlook",
+    // Generic fallback for other allowed types
+    "application/octet-stream",
+  ]),
   name: z.string().min(1).max(100),
   url: z.string().url(),
 });

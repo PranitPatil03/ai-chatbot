@@ -131,6 +131,17 @@ function PureMultimodalInput({
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
 
+    console.log("📤 [MULTIMODAL INPUT] Sending message");
+    console.log("  - Attachments count:", attachments.length);
+    attachments.forEach((att, idx) => {
+      console.log(`  - Attachment ${idx + 1}:`, {
+        name: att.name,
+        type: att.contentType,
+        url: att.url.substring(0, 50) + "...",
+      });
+    });
+    console.log("  - Text input length:", input.length);
+
     sendMessage({
       role: "user",
       parts: [
@@ -141,7 +152,7 @@ function PureMultimodalInput({
           mediaType: attachment.contentType,
         })),
         {
-          type: "text",
+          type: "text" as const,
           text: input,
         },
       ],
@@ -168,6 +179,12 @@ function PureMultimodalInput({
   ]);
 
   const uploadFile = useCallback(async (file: File) => {
+    console.log("⬆️  [UPLOAD] Starting upload for file:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    });
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -182,6 +199,12 @@ function PureMultimodalInput({
         const { url, pathname, contentType, originalFilename } = data;
         const displayName = originalFilename ?? pathname;
 
+        console.log("✅ [UPLOAD] File uploaded successfully:", {
+          url: url.substring(0, 50) + "...",
+          name: displayName,
+          contentType,
+        });
+
         return {
           url,
           name: displayName,
@@ -189,8 +212,10 @@ function PureMultimodalInput({
         };
       }
       const { error } = await response.json();
+      console.error("❌ [UPLOAD] Upload failed:", error);
       toast.error(error);
-    } catch (_error) {
+    } catch (error) {
+      console.error("❌ [UPLOAD] Upload error:", error);
       toast.error("Failed to upload file, please try again!");
     }
   }, []);

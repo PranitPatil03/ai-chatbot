@@ -45,6 +45,10 @@ import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
+import {
+  processFileForAI,
+  isSupportedByClaudeNatively,
+} from "@/lib/ai/file-processor";
 
 export const maxDuration = 60;
 
@@ -94,8 +98,22 @@ export async function POST(request: Request) {
 
   try {
     const json = await request.json();
+    console.log("📥 [CHAT API] Received request body:", JSON.stringify(json, null, 2));
+    
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+    console.log("✅ [CHAT API] Request body validated successfully");
+    
+    // Log message parts details
+    console.log("📝 [CHAT API] Message parts count:", requestBody.message.parts.length);
+    requestBody.message.parts.forEach((part, index) => {
+      if (part.type === "text") {
+        console.log(`  Part ${index}: text - "${part.text.substring(0, 100)}${part.text.length > 100 ? '...' : ''}"`);
+      } else if (part.type === "file") {
+        console.log(`  Part ${index}: file - name: "${part.name}", mediaType: "${part.mediaType}", url: "${part.url}"`);
+      }
+    });
+  } catch (error) {
+    console.error("❌ [CHAT API] Request validation failed:", error);
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
@@ -152,7 +170,45 @@ export async function POST(request: Request) {
       // New chat - no need to fetch messages, it's empty
     }
 
-    const uiMessages = [...convertToUIMessages(messagesFromDb), message];
+    // Process file attachments that Claude doesn't support natively
+    const processedMessage = { ...message };
+    const processedParts = [];
+
+    for (const part of message.parts) {
+      if (part.type === "file") {
+        const filePart = part as any; // Type assertion for extended file properties
+        const mediaType = filePart.mediaType || "";
+        
+        if (!isSupportedByClaudeNatively(mediaType)) {
+          console.log("🔄 [CHAT API] Processing unsupported file type:", mediaType);
+          const processedFile = await processFileForAI(filePart.url, mediaType);
+          
+          if (processedFile) {
+            // Replace file part with text content
+            console.log("✅ [CHAT API] File processed successfully, converting to text");
+            const fileName = filePart.name || "file";
+            processedParts.push({
+              type: "text" as const,
+              text: `[Attached file: ${fileName}]\n\n${processedFile.content}`,
+            });
+          } else {
+            // Keep original if processing failed
+            console.log("⚠️  [CHAT API] File processing failed, keeping original");
+            processedParts.push(part);
+          }
+        } else {
+          processedParts.push(part);
+        }
+      } else {
+        processedParts.push(part);
+      }
+    }
+
+    processedMessage.parts = processedParts;
+
+    const uiMessages = [...convertToUIMessages(messagesFromDb), processedMessage];
+    console.log("💬 [CHAT API] Total UI messages:", uiMessages.length);
+    console.log("💬 [CHAT API] Latest message parts:", JSON.stringify(processedMessage.parts.map(p => p.type === "text" ? { type: "text", text: p.text.substring(0, 100) + "..." } : p), null, 2));
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -175,6 +231,7 @@ export async function POST(request: Request) {
         },
       ],
     });
+    console.log("💾 [CHAT API] User message saved to database");
 
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
@@ -183,10 +240,16 @@ export async function POST(request: Request) {
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
+        const modelMessages = convertToModelMessages(uiMessages);
+        console.log("🤖 [CHAT API] Converting UI messages to model messages");
+        console.log("🤖 [CHAT API] Model messages to Claude:", JSON.stringify(modelMessages, null, 2));
+        console.log("🤖 [CHAT API] Selected model:", selectedChatModel);
+        console.log("🤖 [CHAT API] System prompt generated for:", selectedChatModel);
+        
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
-          messages: convertToModelMessages(uiMessages),
+          messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"

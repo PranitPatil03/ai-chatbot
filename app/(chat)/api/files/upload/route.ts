@@ -15,6 +15,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-outlook",
   "text/plain",
+  "text/csv",
+  "application/octet-stream", // Generic fallback
 ]);
 
 const isAllowedFileType = (type: string) => {
@@ -61,6 +63,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
+    console.log("📁 [FILE UPLOAD] Received file:");
+    console.log("  - Type:", file.type);
+    console.log("  - Size:", file.size, "bytes");
+
     const validatedFile = FileSchema.safeParse({ file });
 
     if (!validatedFile.success) {
@@ -68,12 +74,17 @@ export async function POST(request: Request) {
         .map((error) => error.message)
         .join(", ");
 
+      console.error("❌ [FILE UPLOAD] Validation failed:", errorMessage);
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
+
+    console.log("✅ [FILE UPLOAD] File validated successfully");
 
     // Get filename from formData since Blob doesn't have name property
     const fileFromForm = formData.get("file") as File;
     const originalFilename = fileFromForm.name || "upload";
+    console.log("  - Original filename:", originalFilename);
+    
     const extension = originalFilename.includes(".")
       ? originalFilename.split(".").pop()
       : undefined;
@@ -84,13 +95,20 @@ export async function POST(request: Request) {
       extension ? `.${extension}` : "",
     ].join("");
 
+    console.log("  - Storage object name:", objectName);
+
     const fileBuffer = await file.arrayBuffer();
 
     try {
+      console.log("☁️  [FILE UPLOAD] Uploading to Vercel Blob...");
       const data = await put(objectName, fileBuffer, {
         access: "public",
         contentType: file.type || undefined,
       });
+
+      console.log("✅ [FILE UPLOAD] Upload successful!");
+      console.log("  - URL:", data.url);
+      console.log("  - Content-Type:", file.type || data.contentType);
 
       return NextResponse.json({
         ...data,
