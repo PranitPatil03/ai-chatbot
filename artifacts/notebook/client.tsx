@@ -322,10 +322,6 @@ export function NotebookArtifactComponent({
             {sessionStatus === 'ready' ? '● Ready' : sessionStatus === 'initializing' ? '● Initializing' : sessionStatus === 'error' ? '● Error' : 'Idle'}
           </div>
         </div>
-        
-        <div className="text-xs text-muted-foreground">
-          {cells.length} {cells.length === 1 ? 'cell' : 'cells'} • Read-only
-        </div>
       </div>
       
       {/* Error Banner */}
@@ -569,120 +565,6 @@ export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
     );
   },
   actions: [
-    {
-      icon: <Play size={18} />,
-      label: "Run All",
-      description: "Execute all cells",
-      onClick: async ({ content, metadata, setMetadata }) => {
-        console.log('[Notebook] Run all cells individually');
-        
-        const { cells, setIsExecuting, updateCell, setSessionStatus, setErrorMessage } = useNotebookStore.getState();
-        
-        if (cells.length === 0) {
-          console.warn('[Notebook] No cells to execute');
-          return;
-        }
-        
-        setIsExecuting(true);
-        setSessionStatus('initializing');
-        
-        try {
-          // Collect all code cells
-          const codeCells = cells.filter(cell => cell.type === 'code' && cell.content.trim());
-          
-          if (codeCells.length === 0) {
-            console.warn('[Notebook] No code cells with content');
-            setIsExecuting(false);
-            return;
-          }
-          
-          // Execute cells one by one to capture individual outputs
-          for (let idx = 0; idx < codeCells.length; idx++) {
-            const cell = codeCells[idx];
-            
-            console.log(`[Notebook] Executing cell ${idx + 1}/${codeCells.length}: ${cell.id}`);
-            
-            // Update cell status to running
-            updateCell(cell.id, { 
-              status: 'running',
-              error: undefined,
-              outputs: undefined,
-            });
-            
-            const response = await fetch('/api/jupyter/execute', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chatId: metadata.chatId,
-                code: cell.content,
-              }),
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.error || `Cell ${idx + 1} execution failed`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-              const outputs: NotebookOutput[] = [];
-              
-              if (result.results) {
-                for (const execResult of result.results) {
-                  if (execResult.text) {
-                    outputs.push({ type: 'text', content: execResult.text });
-                  }
-                  if (execResult.png) {
-                    outputs.push({ type: 'image', content: execResult.png, mimeType: 'image/png' });
-                  }
-                  if (execResult.error) {
-                    outputs.push({
-                      type: 'error',
-                      content: execResult.error.name + ': ' + execResult.error.value,
-                    });
-                  }
-                }
-              }
-              
-              updateCell(cell.id, {
-                status: 'success',
-                executionCount: idx + 1,
-                outputs: outputs.length > 0 ? outputs : undefined,
-                executionTime: result.executionTime,
-              });
-            } else {
-              updateCell(cell.id, {
-                status: 'error',
-                error: result.error || 'Execution failed',
-              });
-            }
-          }
-          
-          setSessionStatus('ready');
-          console.log('[Notebook] Run all complete');
-          
-          // Save notebook state to database after execution
-          const { cells: updatedCells } = useNotebookStore.getState();
-          await fetch('/api/notebook/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chatId: metadata.chatId,
-              documentId: metadata.documentId,
-              cells: updatedCells,
-            }),
-          });
-          
-        } catch (error) {
-          console.error('[Notebook] Run all error:', error);
-          setSessionStatus('error');
-          setErrorMessage(error instanceof Error ? error.message : 'Failed to execute code');
-        } finally {
-          setIsExecuting(false);
-        }
-      },
-    },
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
       label: "Download",

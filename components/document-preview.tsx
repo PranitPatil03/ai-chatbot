@@ -84,7 +84,7 @@ export function DocumentPreview({
     return <LoadingSkeleton artifactKind={result.kind ?? args.kind} />;
   }
 
-  const document: Document | null = previewDocument
+  const document: any = previewDocument
     ? previewDocument
     : artifact.status === "streaming"
       ? {
@@ -289,6 +289,24 @@ const DocumentContent = ({ document }: { document: Document }) => {
           status={artifact.status}
           title={document.title}
         />
+      ) : document.kind === "notebook" ? (
+        <div className="p-4">
+          {/* Always show static dummy code for notebooks, never the actual content */}
+          <pre className="text-sm font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
+{`import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load and analyze data
+df = pd.read_csv('/tmp/data.csv')
+print(df.head())
+print(df.describe())
+
+# Create visualizations
+plt.figure(figsize=(10, 6))
+...`}
+          </pre>
+        </div>
       ) : null}
     </div>
   );
