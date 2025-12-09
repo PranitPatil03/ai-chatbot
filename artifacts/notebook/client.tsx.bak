@@ -1,0 +1,844 @@
+import { memo, useEffect, useState } from 'react';
+import { create } from 'zustand';
+import type { NotebookCell, NotebookOutput } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Play, Loader2, CheckCircle2, XCircle, Plus } from 'lucide-react';
+import { Artifact } from '@/components/create-artifact';
+
+/**
+ * Notebook Artifact Client Component
+ * 
+ * Jupyter-style notebook interface for data analysis
+ * Features:
+ * - Multiple cells (code, markdown, output)
+ * - Cell-by-cell execution
+ * - Execution status indicators
+ * - Output rendering (text, images, errors, tables)
+ */
+
+// Zustand store for notebook state
+interface NotebookStore {
+  cells: NotebookCell[];
+  isExecuting: boolean;
+  currentCellId: string | null;
+  sessionStatus: 'idle' | 'initializing' | 'ready' | 'error';
+  errorMessage: string | null;
+  
+  setCells: (cells: NotebookCell[]) => void;
+  setIsExecuting: (isExecuting: boolean) => void;
+  setCurrentCellId: (cellId: string | null) => void;
+  setSessionStatus: (status: 'idle' | 'initializing' | 'ready' | 'error') => void;
+  setErrorMessage: (message: string | null) => void;
+  updateCell: (cellId: string, updates: Partial<NotebookCell>) => void;
+  addCell: (afterCellId?: string) => void;
+  deleteCell: (cellId: string) => void;
+}
+
+const useNotebookStore = create<NotebookStore>((set) => ({
+  cells: [],
+  isExecuting: false,
+  currentCellId: null,
+  sessionStatus: 'idle',
+  errorMessage: null,
+  
+  setCells: (cells) => set({ cells }),
+  setIsExecuting: (isExecuting) => set({ isExecuting }),
+  setCurrentCellId: (currentCellId) => set({ currentCellId }),
+  setSessionStatus: (sessionStatus) => set({ sessionStatus }),
+  setErrorMessage: (errorMessage) => set({ errorMessage }),
+  
+  updateCell: (cellId, updates) => set((state) => ({
+    cells: state.cells.map((cell) =>
+      cell.id === cellId ? { ...cell, ...updates } : cell
+    ),
+  })),
+  
+  addCell: (afterCellId) => set((state) => {
+    const newCell: NotebookCell = {
+      id: `cell-${Date.now()}`,
+      type: 'code',
+      content: '',
+      status: 'idle',
+    };
+    
+    if (!afterCellId) {
+      return { cells: [...state.cells, newCell] };
+    }
+    
+    const index = state.cells.findIndex((c) => c.id === afterCellId);
+    const newCells = [...state.cells];
+    newCells.splice(index + 1, 0, newCell);
+    return { cells: newCells };
+  }),
+  
+  deleteCell: (cellId) => set((state) => ({
+    cells: state.cells.filter((c) => c.id !== cellId),
+  })),
+}));
+
+// Cell Output Renderer
+function CellOutput({ output }: { output: NotebookOutput }) {
+  if (output.type === 'text') {
+    return (
+      <pre className="text-sm font-mono whitespace-pre-wrap bg-muted/30 p-3 rounded-md overflow-x-auto">
+        {output.content}
+      </pre>
+    );
+  }
+  
+  if (output.type === 'image') {
+    return (
+      <div className="rounded-md overflow-hidden border">
+        <img 
+          src={`data:${output.mimeType};base64,${output.content}`}
+          alt="Output visualization"
+          className="max-w-full h-auto"
+        />
+      </div>
+    );
+  }
+  
+  if (output.type === 'error') {
+    return (
+      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+        <div className="flex items-start gap-2">
+          <XCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+          <pre className="text-sm font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap flex-1 overflow-x-auto">
+            {output.content}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+  
+  if (output.type === 'table') {
+    return (
+      <div className="overflow-x-auto border rounded-md">
+        <pre className="text-sm font-mono p-3 bg-muted/30">
+          {output.content}
+        </pre>
+      </div>
+    );
+  }
+  
+  return null;
+}
+
+// Individual Cell Component
+const NotebookCellComponent = memo(({
+  cell,
+  onExecute,
+  isExecuting,
+}: {
+  cell: NotebookCell;
+  onExecute: (cellId: string) => void;
+  isExecuting: boolean;
+}) => {
+  const { updateCell, deleteCell } = useNotebookStore();
+  const [isHovered, setIsHovered] = useState(false);
+  
+  const handleContentChange = (content: string) => {
+    updateCell(cell.id, { content });
+  };
+  
+  const handleExecute = () => {
+    if (!isExecuting && cell.content.trim()) {
+      onExecute(cell.id);
+    }
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleExecute();
+    }
+  };
+  
+  const statusIcon = {
+    idle: null,
+    running: <Loader2 className="h-4 w-4 animate-spin text-blue-500" />,
+    success: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+    error: <XCircle className="h-4 w-4 text-red-500" />,
+  }[cell.status || 'idle'];
+  
+  return (
+    <div
+      className="group relative border-l-2 border-transparent hover:border-blue-500 transition-colors"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="flex gap-2 p-4">
+        {/* Execution Count / Status */}
+        <div className="flex flex-col items-center gap-2 w-12 shrink-0">
+          <div className="text-xs text-muted-foreground font-mono">
+            {cell.executionCount ? `[${cell.executionCount}]` : '[ ]'}
+          </div>
+          {statusIcon}
+        </div>
+        
+        {/* Cell Content */}
+        <div className="flex-1 space-y-2">
+          {/* Code Input */}
+          <div className="relative">
+            <textarea
+              value={cell.content}
+              onChange={(e) => handleContentChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="# Write Python code here... (Cmd/Ctrl+Enter to run)"
+              className="w-full min-h-[100px] p-3 font-mono text-sm bg-muted/30 border rounded-md resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isExecuting}
+            />
+            
+            {/* Execute Button */}
+            {(isHovered || cell.status === 'running') && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="absolute top-2 right-2"
+                onClick={handleExecute}
+                disabled={isExecuting || !cell.content || !cell.content.trim()}
+              >
+                {cell.status === 'running' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+          </div>
+          
+          {/* Cell Outputs */}
+          {cell.outputs && cell.outputs.length > 0 && (
+            <div className="space-y-2">
+              {cell.outputs.map((output, idx) => (
+                <CellOutput key={idx} output={output} />
+              ))}
+            </div>
+          )}
+          
+          {/* Execution Time */}
+          {cell.executionTime !== undefined && (
+            <div className="text-xs text-muted-foreground">
+              Executed in {cell.executionTime}ms
+            </div>
+          )}
+          
+          {/* Error Message */}
+          {cell.error && (
+            <div className="text-sm text-red-600 dark:text-red-400">
+              {cell.error}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+NotebookCellComponent.displayName = 'NotebookCell';
+
+// Main Notebook Component
+export function NotebookArtifactComponent({
+  content,
+  isStreaming,
+  onExecute,
+}: {
+  content: string;
+  isStreaming: boolean;
+  onExecute?: (cellId: string, code: string) => Promise<void>;
+}) {
+  const { cells, setCells, isExecuting, setIsExecuting, sessionStatus, errorMessage, addCell } = useNotebookStore();
+  
+  // Parse content on mount or when content changes
+  useEffect(() => {
+      length: content?.length,
+      isEmpty: !content,
+      preview: content?.substring(0, 100)
+    });
+
+    if (!content || content.trim() === '') {
+      setCells([
+        {
+          id: 'cell-1',
+          type: 'code',
+          content: '',
+          status: 'idle',
+        },
+      ]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(content);
+        isArray: Array.isArray(parsed),
+        cellCount: Array.isArray(parsed) ? parsed.length : 0
+      });
+      
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setCells(parsed);
+      } else {
+        console.warn('[Notebook Client] Parsed but not a valid array, using default');
+        setCells([
+          {
+            id: 'cell-1',
+            type: 'code',
+            content: '',
+            status: 'idle',
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('[Notebook Client] Failed to parse notebook content:', error);
+      console.error('[Notebook Client] Invalid content:', content);
+      // Initialize with empty cell if parsing fails
+      if (cells.length === 0) {
+        setCells([
+          {
+            id: 'cell-1',
+            type: 'code',
+            content: '',
+            status: 'idle',
+          },
+        ]);
+      }
+    }
+  }, [content]);
+  
+  const handleExecuteCell = async (cellId: string) => {
+    const cell = cells.find((c) => c.id === cellId);
+    if (!cell || !onExecute) return;
+    
+    setIsExecuting(true);
+    
+    try {
+      await onExecute(cellId, cell.content);
+    } catch (error) {
+      console.error('Execution error:', error);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+  
+  const handleAddCell = () => {
+    addCell(cells[cells.length - 1]?.id);
+  };
+  
+  return (
+    <div className="flex flex-col h-full">
+      {/* Notebook Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium">Data Analysis Notebook</div>
+          <div className={cn(
+            "text-xs px-2 py-0.5 rounded-full",
+            sessionStatus === 'ready' && "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
+            sessionStatus === 'initializing' && "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
+            sessionStatus === 'error' && "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400",
+            sessionStatus === 'idle' && "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400"
+          )}>
+            {sessionStatus}
+          </div>
+        </div>
+        
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleAddCell}
+          disabled={isExecuting}
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add Cell
+        </Button>
+      </div>
+      
+      {/* Error Banner */}
+      {errorMessage && (
+        <div className="bg-red-50 dark:bg-red-950/20 border-b border-red-200 dark:border-red-800 p-3">
+          <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+            <XCircle className="h-4 w-4" />
+            {errorMessage}
+          </div>
+        </div>
+      )}
+      
+      {/* Notebook Cells */}
+      <div className="flex-1 overflow-y-auto">
+        {cells.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center">
+              <p className="text-sm mb-2">No cells yet</p>
+              <Button size="sm" variant="outline" onClick={handleAddCell}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Cell
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {cells.map((cell) => (
+              <NotebookCellComponent
+                key={cell.id}
+                cell={cell}
+                onExecute={handleExecuteCell}
+                isExecuting={isExecuting}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* Streaming Indicator */}
+      {isStreaming && (
+        <div className="border-t p-3 bg-muted/30">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Generating code...
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Metadata type for notebook
+type NotebookMetadata = {
+  chatId?: string;
+  documentId?: string;
+  sessionId?: string;
+  filesLoaded?: string[];
+};
+
+// Artifact definition
+export const notebookArtifact = new Artifact<'notebook', NotebookMetadata>({
+  kind: 'notebook',
+  description: 'Useful for data analysis with Python notebooks; Execute code cells with uploaded CSV/Excel files.',
+  initialize: ({ setMetadata, documentId, chatId }) => {
+    setMetadata({
+      chatId: chatId,
+      documentId: documentId,
+      sessionId: undefined,
+      filesLoaded: [],
+    });
+  },
+  onStreamPart: ({ streamPart, setArtifact }) => {
+    if (streamPart.type === 'data-notebookDelta') {
+      setArtifact((draftArtifact) => ({
+        ...draftArtifact,
+        content: streamPart.data,
+        isVisible: true,
+        status: 'streaming',
+      }));
+    }
+  },
+  content: ({ content, status, metadata, setMetadata }) => {
+    // Auto-execute all cells when notebook is created
+    const { useEffect } = require('react');
+    const hasAutoExecuted = require('react').useRef(false);
+    
+    useEffect(() => {
+      // Auto-execute once when streaming finishes and we have cells
+      if (status === 'idle' && !hasAutoExecuted.current && metadata.chatId) {
+        const { cells } = useNotebookStore.getState();
+        const codeCells = cells.filter(c => c.type === 'code' && c.content.trim());
+        
+        if (codeCells.length > 0) {
+          hasAutoExecuted.current = true;
+          
+          // Execute all cells individually to capture outputs per cell
+          setTimeout(async () => {
+            const { setIsExecuting, updateCell, setSessionStatus, setErrorMessage } = useNotebookStore.getState();
+            
+            setIsExecuting(true);
+            setSessionStatus('initializing');
+            
+            try {
+              // Execute cells one by one to capture individual outputs
+              for (let idx = 0; idx < codeCells.length; idx++) {
+                const cell = codeCells[idx];
+                
+                
+                // Update cell status to running
+                updateCell(cell.id, { 
+                  status: 'running',
+                  error: undefined,
+                  outputs: undefined,
+                });
+                
+                const response = await fetch('/api/jupyter/execute', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chatId: metadata.chatId,
+                    code: cell.content,
+                  }),
+                });
+                
+                if (!response.ok) {
+                  throw new Error(`Cell ${idx + 1} execution failed`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                  const outputs: NotebookOutput[] = [];
+                  
+                  if (result.results) {
+                    for (const execResult of result.results) {
+                      if (execResult.text) {
+                        outputs.push({ type: 'text', content: execResult.text });
+                      }
+                      if (execResult.png) {
+                        outputs.push({ type: 'image', content: execResult.png, mimeType: 'image/png' });
+                      }
+                      if (execResult.error) {
+                        outputs.push({ type: 'error', content: execResult.error.name + ': ' + execResult.error.value });
+                      }
+                    }
+                  }
+                  
+                  updateCell(cell.id, {
+                    status: 'success',
+                    executionCount: idx + 1,
+                    outputs: outputs.length > 0 ? outputs : undefined,
+                    executionTime: result.executionTime,
+                  });
+                } else {
+                  updateCell(cell.id, {
+                    status: 'error',
+                    error: result.error || 'Execution failed',
+                  });
+                }
+              }
+              
+              setSessionStatus('ready');
+              
+              // Save notebook state to database after execution
+              const { cells: updatedCells } = useNotebookStore.getState();
+              await fetch('/api/notebook/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chatId: metadata.chatId,
+                  documentId: metadata.documentId,
+                  cells: updatedCells,
+                }),
+              });
+              
+            } catch (error) {
+              console.error('[Notebook] Auto-execution error:', error);
+              setSessionStatus('error');
+              setErrorMessage(error instanceof Error ? error.message : 'Auto-execution failed');
+            } finally {
+              setIsExecuting(false);
+            }
+          }, 500);
+        }
+      }
+    }, [status, metadata.chatId, metadata.documentId]);
+    
+    const handleExecute = async (cellId: string, code: string) => {
+      
+      const { updateCell, setSessionStatus, setErrorMessage } = useNotebookStore.getState();
+      
+      // Update cell status to running
+      updateCell(cellId, { 
+        status: 'running',
+        error: undefined,
+        outputs: undefined,
+      });
+      
+      setSessionStatus('initializing');
+      
+      try {
+        // Call E2B execution API
+        const response = await fetch('/api/jupyter/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: metadata.chatId,
+            code: code,
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Execution failed');
+        }
+        
+        const result = await response.json();
+        
+        setSessionStatus('ready');
+        
+        if (result.success) {
+          // Process execution results
+          const outputs: NotebookOutput[] = [];
+          
+          if (result.results) {
+            for (const execResult of result.results) {
+              // Text output
+              if (execResult.text) {
+                outputs.push({
+                  type: 'text',
+                  content: execResult.text,
+                });
+              }
+              
+              // Image output (matplotlib, etc.)
+              if (execResult.png) {
+                outputs.push({
+                  type: 'image',
+                  content: execResult.png,
+                  mimeType: 'image/png',
+                });
+              }
+              
+              // Error output
+              if (execResult.error) {
+                outputs.push({
+                  type: 'error',
+                  content: execResult.error.name + ': ' + execResult.error.value + '\n' + execResult.error.traceback,
+                });
+              }
+            }
+          }
+          
+          // Update cell with results
+          updateCell(cellId, {
+            status: 'success',
+            outputs: outputs,
+            executionTime: result.executionTime,
+            executionCount: (useNotebookStore.getState().cells.find(c => c.id === cellId)?.executionCount || 0) + 1,
+          });
+          
+          // Update metadata with session info
+          if (result.sandboxId && !metadata.sessionId) {
+            setMetadata((prev) => ({
+              ...prev,
+              sessionId: result.sandboxId,
+            }));
+          }
+          
+          // Save notebook state after execution
+          const { cells: updatedCells } = useNotebookStore.getState();
+          fetch('/api/notebook/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: metadata.chatId,
+              documentId: metadata.documentId,
+              cells: updatedCells,
+            }),
+          }).catch(err => console.error('[Notebook] Failed to save after execution:', err));
+          
+        } else {
+          // Execution failed
+          updateCell(cellId, {
+            status: 'error',
+            error: result.error || 'Unknown execution error',
+          });
+          setErrorMessage(result.error || 'Execution failed');
+        }
+      } catch (error) {
+        console.error('[Notebook] Execution error:', error);
+        setSessionStatus('error');
+        updateCell(cellId, {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Failed to execute code',
+        });
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to execute code');
+      }
+    };
+    
+    return (
+      <NotebookArtifactComponent
+        content={content}
+        isStreaming={status === 'streaming'}
+        onExecute={handleExecute}
+      />
+    );
+  },
+  actions: [
+    {
+      icon: <Play size={18} />,
+      label: "Run All",
+      description: "Execute all cells",
+      onClick: async ({ content, metadata, setMetadata }) => {
+        
+        const { cells, setIsExecuting, updateCell, setSessionStatus, setErrorMessage } = useNotebookStore.getState();
+        
+        if (cells.length === 0) {
+          console.warn('[Notebook] No cells to execute');
+          return;
+        }
+        
+        setIsExecuting(true);
+        setSessionStatus('initializing');
+        
+        try {
+          // Collect all code cells
+          const codeCells = cells.filter(cell => cell.type === 'code' && cell.content.trim());
+          
+          if (codeCells.length === 0) {
+            console.warn('[Notebook] No code cells with content');
+            setIsExecuting(false);
+            return;
+          }
+          
+          // Execute cells one by one to capture individual outputs
+          for (let idx = 0; idx < codeCells.length; idx++) {
+            const cell = codeCells[idx];
+            
+            
+            // Update cell status to running
+            updateCell(cell.id, { 
+              status: 'running',
+              error: undefined,
+              outputs: undefined,
+            });
+            
+            const response = await fetch('/api/jupyter/execute', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: metadata.chatId,
+                code: cell.content,
+              }),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || `Cell ${idx + 1} execution failed`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              const outputs: NotebookOutput[] = [];
+              
+              if (result.results) {
+                for (const execResult of result.results) {
+                  if (execResult.text) {
+                    outputs.push({ type: 'text', content: execResult.text });
+                  }
+                  if (execResult.png) {
+                    outputs.push({ type: 'image', content: execResult.png, mimeType: 'image/png' });
+                  }
+                  if (execResult.error) {
+                    outputs.push({
+                      type: 'error',
+                      content: execResult.error.name + ': ' + execResult.error.value,
+                    });
+                  }
+                }
+              }
+              
+              updateCell(cell.id, {
+                status: 'success',
+                executionCount: idx + 1,
+                outputs: outputs.length > 0 ? outputs : undefined,
+                executionTime: result.executionTime,
+              });
+            } else {
+              updateCell(cell.id, {
+                status: 'error',
+                error: result.error || 'Execution failed',
+              });
+            }
+          }
+          
+          setSessionStatus('ready');
+          
+          // Save notebook state to database after execution
+          const { cells: updatedCells } = useNotebookStore.getState();
+          await fetch('/api/notebook/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: metadata.chatId,
+              documentId: metadata.documentId,
+              cells: updatedCells,
+            }),
+          });
+          
+        } catch (error) {
+          console.error('[Notebook] Run all error:', error);
+          setSessionStatus('error');
+          setErrorMessage(error instanceof Error ? error.message : 'Failed to execute code');
+        } finally {
+          setIsExecuting(false);
+        }
+      },
+    },
+    {
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+      label: "Download",
+      description: "Download as Jupyter Notebook",
+      onClick: async ({ content, metadata }) => {
+        
+        const { cells } = useNotebookStore.getState();
+        
+        // Convert to .ipynb format
+        const notebook = {
+          cells: cells.map(cell => ({
+            cell_type: cell.type === 'code' ? 'code' : 'markdown',
+            execution_count: cell.executionCount || null,
+            metadata: {},
+            outputs: cell.outputs?.map(output => {
+              if (output.type === 'text') {
+                return {
+                  output_type: 'stream',
+                  name: 'stdout',
+                  text: [output.content]
+                };
+              } else if (output.type === 'image') {
+                return {
+                  output_type: 'display_data',
+                  data: {
+                    'image/png': output.content
+                  },
+                  metadata: {}
+                };
+              } else if (output.type === 'error') {
+                return {
+                  output_type: 'error',
+                  ename: 'Error',
+                  evalue: output.content,
+                  traceback: [output.content]
+                };
+              }
+              return null;
+            }).filter(Boolean) || [],
+            source: [cell.content]
+          })),
+          metadata: {
+            kernelspec: {
+              display_name: 'Python 3',
+              language: 'python',
+              name: 'python3'
+            },
+            language_info: {
+              name: 'python',
+              version: '3.10.0'
+            }
+          },
+          nbformat: 4,
+          nbformat_minor: 5
+        };
+        
+        // Create blob and download
+        const blob = new Blob([JSON.stringify(notebook, null, 2)], { type: 'application/x-ipynb+json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'analysis.ipynb';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+      },
+    },
+  ],
+  toolbar: [],
+});

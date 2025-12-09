@@ -52,6 +52,7 @@ type ArtifactContent<M = any> = {
 type InitializeParameters<M = any> = {
   documentId: string;
   setMetadata: Dispatch<SetStateAction<M>>;
+  chatId: string;
 };
 
 type ArtifactConfig<T extends string, M = any> = {

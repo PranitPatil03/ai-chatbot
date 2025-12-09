@@ -14,6 +14,7 @@ import useSWR, { useSWRConfig } from "swr";
 import { useDebounceCallback, useWindowSize } from "usehooks-ts";
 import { codeArtifact } from "@/artifacts/code/client";
 import { imageArtifact } from "@/artifacts/image/client";
+import { notebookArtifact } from "@/artifacts/notebook/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
@@ -34,6 +35,7 @@ export const artifactDefinitions = [
   codeArtifact,
   imageArtifact,
   sheetArtifact,
+  notebookArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]["kind"];
 
@@ -256,9 +258,10 @@ function PureArtifact({
       artifactDefinition.initialize({
         documentId: artifact.documentId,
         setMetadata,
+        chatId,
       });
     }
-  }, [artifact.documentId, artifactDefinition, setMetadata]);
+  }, [artifact.documentId, artifactDefinition, setMetadata, chatId]);
 
   return (
     <AnimatePresence>

@@ -1,0 +1,16 @@
+EmployeeID,Name,Department,Position,Salary,HireDate,YearsExperience
+E001,John Smith,Engineering,Senior Developer,95000,2020-03-15,8
+E002,Sarah Johnson,Marketing,Marketing Manager,85000,2019-07-22,10
+E003,Michael Brown,Engineering,Junior Developer,65000,2023-01-10,2
+E004,Emily Davis,HR,HR Specialist,70000,2021-06-01,5
+E005,David Wilson,Sales,Sales Representative,75000,2022-04-18,4
+E006,Lisa Anderson,Engineering,Tech Lead,110000,2018-09-30,12
+E007,Robert Taylor,Finance,Financial Analyst,80000,2021-11-08,6
+E008,Jennifer Martinez,Marketing,Content Writer,68000,2022-08-25,3
+E009,William Garcia,Engineering,DevOps Engineer,92000,2020-12-03,7
+E010,Jessica Rodriguez,Sales,Sales Manager,95000,2019-05-14,9
+E011,Christopher Lee,Engineering,Senior Developer,98000,2020-07-20,8
+E012,Amanda White,HR,Recruiter,72000,2023-02-15,2
+E013,Daniel Harris,Engineering,Full Stack Developer,88000,2021-03-12,6
+E014,Ashley Clark,Finance,Accountant,76000,2022-01-30,4
+E015,Matthew Lewis,Sales,Sales Representative,73000,2023-06-05,1

@@ -4,13 +4,22 @@ import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
 
-const MAX_FILE_SIZE_BYTES = 40 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // Increased to 50MB for data files
 const ALLOWED_MIME_TYPES = new Set([
+  // CSV files
+  "text/csv",
+  "application/csv",
+  "text/x-csv",
+  "application/x-csv",
+  // Excel files
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel.sheet.macroEnabled.12",
+  "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+  // Legacy formats (keeping for compatibility)
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-outlook",
@@ -34,11 +43,11 @@ const FileSchema = z.object({
   file: z
     .instanceof(Blob)
     .refine((file) => file.size <= MAX_FILE_SIZE_BYTES, {
-      message: "File size should be less than 20MB",
+      message: "File size should be less than 50MB",
     })
     .refine((file) => isAllowedFileType(file.type), {
       message:
-        "File type should be an image, PDF, Word, PowerPoint, or Excel document",
+        "File type should be an image, CSV, Excel, PDF, Word, PowerPoint, or text document",
     }),
 });
 

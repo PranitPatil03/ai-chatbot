@@ -22,7 +22,10 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       kind: z.enum(artifactKinds),
     }),
     execute: async ({ title, kind }) => {
+      console.log('[CreateDocument Tool] Called with:', { title, kind });
+      
       const id = generateUUID();
+      console.log('[CreateDocument Tool] Generated ID:', id);
 
       dataStream.write({
         type: "data-kind",
@@ -54,9 +57,11 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       );
 
       if (!documentHandler) {
+        console.error('[CreateDocument Tool] No handler found for kind:', kind);
         throw new Error(`No document handler found for kind: ${kind}`);
       }
 
+      console.log('[CreateDocument Tool] Handler found, calling onCreateDocument');
       await documentHandler.onCreateDocument({
         id,
         title,
@@ -66,6 +71,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
 
       dataStream.write({ type: "data-finish", data: null, transient: true });
 
+      console.log('[CreateDocument Tool] Document creation complete');
       return {
         id,
         title,

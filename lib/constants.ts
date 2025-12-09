@@ -11,3 +11,13 @@ export const isTestEnvironment = Boolean(
 export const guestRegex = /^guest-\d+$/;
 
 export const DUMMY_PASSWORD = generateDummyPassword();
+
+// File upload constants for data analysis
+export const ALLOWED_FILE_TYPES = {
+  'text/csv': ['.csv'],
+  'application/vnd.ms-excel': ['.xls'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+} as const;
+
+export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+export const MAX_FILES_PER_CHAT = 5;

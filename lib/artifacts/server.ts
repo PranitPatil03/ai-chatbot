@@ -1,6 +1,7 @@
 import type { UIMessageStreamWriter } from "ai";
 import type { Session } from "next-auth";
 import { codeDocumentHandler } from "@/artifacts/code/server";
+import { notebookDocumentHandler } from "@/artifacts/notebook/server";
 import { sheetDocumentHandler } from "@/artifacts/sheet/server";
 import { textDocumentHandler } from "@/artifacts/text/server";
 import type { ArtifactKind } from "@/components/artifact";
@@ -44,6 +45,12 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
   return {
     kind: config.kind,
     onCreateDocument: async (args: CreateDocumentCallbackProps) => {
+      console.log('[DocumentHandler] onCreateDocument called:', { 
+        kind: config.kind, 
+        id: args.id, 
+        title: args.title 
+      });
+      
       const draftContent = await config.onCreateDocument({
         id: args.id,
         title: args.title,
@@ -51,7 +58,15 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
         session: args.session,
       });
 
+      console.log('[DocumentHandler] Draft content generated:', {
+        kind: config.kind,
+        id: args.id,
+        contentLength: draftContent.length,
+        isEmpty: !draftContent
+      });
+
       if (args.session?.user?.id) {
+        console.log('[DocumentHandler] Saving document to database...');
         await saveDocument({
           id: args.id,
           title: args.title,
@@ -59,16 +74,30 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
           kind: config.kind,
           userId: args.session.user.id,
         });
+        console.log('[DocumentHandler] Document saved successfully');
+      } else {
+        console.warn('[DocumentHandler] No user ID, skipping database save');
       }
 
       return;
     },
     onUpdateDocument: async (args: UpdateDocumentCallbackProps) => {
+      console.log('[DocumentHandler] onUpdateDocument called:', {
+        kind: config.kind,
+        id: args.document.id,
+        description: args.description
+      });
+      
       const draftContent = await config.onUpdateDocument({
         document: args.document,
         description: args.description,
         dataStream: args.dataStream,
         session: args.session,
+      });
+
+      console.log('[DocumentHandler] Updated content generated:', {
+        kind: config.kind,
+        contentLength: draftContent.length
       });
 
       if (args.session?.user?.id) {
@@ -92,7 +121,8 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
 export const documentHandlersByArtifactKind: DocumentHandler[] = [
   textDocumentHandler,
   codeDocumentHandler,
+  notebookDocumentHandler,
   sheetDocumentHandler,
 ];
 
-export const artifactKinds = ["text", "code", "sheet"] as const;
+export const artifactKinds = ["text", "code", "notebook", "sheet"] as const;

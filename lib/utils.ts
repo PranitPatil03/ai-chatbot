@@ -10,6 +10,7 @@ import { twMerge } from 'tailwind-merge';
 import type { DBMessage, Document } from '@/lib/db/schema';
 import { ChatSDKError, type ErrorCode } from './errors';
 import type { ChatMessage, ChatTools, CustomUIDataTypes } from './types';
+import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from './constants';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -113,4 +114,34 @@ export function getTextFromMessage(message: ChatMessage | UIMessage): string {
     .filter((part) => part.type === 'text')
     .map((part) => (part as { type: 'text'; text: string}).text)
     .join('');
+}
+
+/**
+ * Validates if a file is allowed for data analysis (CSV/Excel only)
+ */
+export function validateFileType(file: File): { valid: boolean; error?: string } {
+  // Check file size
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      valid: false,
+      error: `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`,
+    };
+  }
+
+  // Check file type
+  const allowedTypes = Object.keys(ALLOWED_FILE_TYPES);
+  const allowedExtensions = Object.values(ALLOWED_FILE_TYPES).flat();
+
+  const fileExtension = `.${file.name.split('.').pop()?.toLowerCase()}` as string;
+  const isTypeAllowed = allowedTypes.includes(file.type);
+  const isExtensionAllowed = allowedExtensions.includes(fileExtension as '.csv' | '.xls' | '.xlsx');
+
+  if (!isTypeAllowed && !isExtensionAllowed) {
+    return {
+      valid: false,
+      error: `File type not supported. Please upload CSV or Excel files only.`,
+    };
+  }
+
+  return { valid: true };
 }

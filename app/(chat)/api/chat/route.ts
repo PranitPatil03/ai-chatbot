@@ -154,6 +154,116 @@ export async function POST(request: Request) {
 
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
+    console.log('[Chat API] Processing message:', {
+      chatId: id,
+      messageId: message.id,
+      partsCount: message.parts.length,
+      parts: message.parts.map(p => ({ type: p.type, ...(p.type === 'file' ? { name: (p as any).name, mediaType: (p as any).mediaType } : {}) }))
+    });
+
+    // Process CSV/Excel files and convert to text metadata
+    const processedParts = await Promise.all(
+      message.parts.map(async (part) => {
+        if (part.type === 'file') {
+          const filePart = part as any;
+          const mediaType = filePart.mediaType || '';
+          
+          // Check if it's a CSV or Excel file
+          const isDataFile = 
+            mediaType.includes('csv') || 
+            mediaType.includes('excel') ||
+            mediaType.includes('spreadsheet') ||
+            mediaType.includes('vnd.ms-excel');
+
+          if (isDataFile) {
+            console.log('[Chat API] Detected data file:', {
+              name: filePart.name,
+              mediaType: filePart.mediaType,
+              url: filePart.url
+            });
+
+            try {
+              // Call the file processing API to extract metadata
+              const processResponse = await fetch(`${request.url.split('/api/chat')[0]}/api/files/process`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Cookie': request.headers.get('Cookie') || '',
+                },
+                body: JSON.stringify({
+                  chatId: id,
+                  blobUrl: filePart.url,
+                  fileName: filePart.name,
+                  fileSize: 0, // We don't have size here, but it's already uploaded
+                  fileType: filePart.mediaType,
+                }),
+              });
+
+              if (processResponse.ok) {
+                const metadata = await processResponse.json();
+                console.log('[Chat API] File processed successfully:', metadata);
+
+                // Convert file to text representation with metadata ONLY (no blob URL, no full data)
+                return {
+                  type: 'text' as const,
+                  text: `[Data File Uploaded: ${filePart.name}]
+Type: ${filePart.mediaType}
+Rows: ${metadata.rowCount || 'Unknown'}
+Columns (${metadata.headers?.length || 0}): ${metadata.headers ? metadata.headers.join(', ') : 'Unknown'}
+${metadata.sheetNames ? `Sheets: ${metadata.sheetNames.join(', ')}` : ''}
+Encoding: ${metadata.encoding || 'Unknown'}
+
+Note: Full dataset is pre-loaded in Python environment at path: /tmp/${filePart.name}
+Use pandas.read_csv() or pandas.read_excel() to load it for analysis.`
+                };
+              } else {
+                console.error('[Chat API] File processing failed:', await processResponse.text());
+                // Fall back to basic file reference (NO BLOB URL)
+                return {
+                  type: 'text' as const,
+                  text: `[Data File: ${filePart.name} - Metadata extraction failed, but file is available at /tmp/${filePart.name}]`
+                };
+              }
+            } catch (error) {
+              console.error('[Chat API] Error processing file:', error);
+              return {
+                type: 'text' as const,
+                text: `[Data File: ${filePart.name}]`
+              };
+            }
+          }
+
+          // For image files, keep as is
+          if (mediaType.startsWith('image/')) {
+            console.log('[Chat API] Keeping image file as-is:', filePart.name);
+            return part;
+          }
+
+          // For other file types, convert to text reference
+          console.log('[Chat API] Converting non-image file to text:', filePart.name);
+          return {
+            type: 'text' as const,
+            text: `[File: ${filePart.name}]`
+          };
+        }
+        return part;
+      })
+    );
+
+    console.log('[Chat API] Processed parts:', {
+      original: message.parts.length,
+      processed: processedParts.length,
+      types: processedParts.map(p => p.type)
+    });
+
+    // Create processed message with converted parts
+    const processedMessage = {
+      ...message,
+      parts: processedParts,
+    };
+
+    const processedUiMessages = [...convertToUIMessages(messagesFromDb), processedMessage];
+
     const { longitude, latitude, city, country } = geolocation(request);
 
     const requestHints: RequestHints = {
@@ -169,7 +279,7 @@ export async function POST(request: Request) {
           chatId: id,
           id: message.id,
           role: "user",
-          parts: message.parts,
+          parts: message.parts, // Save original parts with file URLs
           attachments: [],
           createdAt: new Date(),
         },
@@ -181,12 +291,14 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
+    console.log('[Chat API] Starting stream with processed messages');
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
-          messages: convertToModelMessages(uiMessages),
+          messages: convertToModelMessages(processedUiMessages),
           stopWhen: stepCountIs(5),
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"

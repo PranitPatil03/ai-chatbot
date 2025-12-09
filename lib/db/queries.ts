@@ -31,6 +31,8 @@ import {
   type User,
   user,
   vote,
+  fileMetadata,
+  notebookState,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -322,18 +324,31 @@ export async function saveDocument({
   userId: string;
 }) {
   try {
-    return await db
+    console.log('[DB] saveDocument called:', { id, title, kind, contentLength: content.length, userId });
+    
+    // Map "notebook" to "code" since the schema doesn't support "notebook"
+    const mappedKind = kind === "notebook" ? "code" : kind;
+    
+    const createdAt = new Date();
+    
+    // Document table has composite primary key (id, createdAt)
+    // So we can't use onConflictDoUpdate - just insert new version
+    const result = await db
       .insert(document)
       .values({
-        id,
+        id, // Use the provided ID
         title,
-        kind,
+        kind: mappedKind,
         content,
         userId,
-        createdAt: new Date(),
+        createdAt,
       })
       .returning();
-  } catch (_error) {
+    
+    console.log('[DB] Document saved successfully:', { id, createdAt: createdAt.toISOString(), rowsAffected: result.length });
+    return result;
+  } catch (error) {
+    console.error('[DB] Failed to save document:', error);
     throw new ChatSDKError("bad_request:database", "Failed to save document");
   }
 }
@@ -588,6 +603,187 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+// File Metadata queries for data analysis
+export async function saveFileMetadata({
+  id,
+  chatId,
+  fileName,
+  fileSize,
+  fileType,
+  blobUrl,
+  headers,
+  rowCount,
+  sheetNames,
+  encoding,
+  uploadedAt,
+  processedAt,
+}: {
+  id: string;
+  chatId: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  blobUrl: string;
+  headers: string[];
+  rowCount: number;
+  sheetNames?: string[];
+  encoding?: string;
+  uploadedAt: Date;
+  processedAt: Date;
+}) {
+  try {
+    await db.insert(fileMetadata).values({
+      id,
+      chatId,
+      fileName,
+      fileSize: fileSize.toString(),
+      fileType,
+      blobUrl,
+      headers,
+      rowCount: rowCount.toString(),
+      sheetNames,
+      encoding,
+      uploadedAt,
+      processedAt,
+    });
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to save file metadata"
+    );
+  }
+}
+
+export async function getFileMetadataByChatId({ chatId }: { chatId: string }) {
+  try {
+    return await db
+      .select()
+      .from(fileMetadata)
+      .where(eq(fileMetadata.chatId, chatId))
+      .orderBy(desc(fileMetadata.uploadedAt));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get file metadata by chat id"
+    );
+  }
+}
+
+export async function getFileMetadataById({ id }: { id: string }) {
+  try {
+    const [metadata] = await db
+      .select()
+      .from(fileMetadata)
+      .where(eq(fileMetadata.id, id));
+    return metadata;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get file metadata by id"
+    );
+  }
+}
+
+// Notebook State queries for data analysis
+export async function saveNotebookState({
+  id,
+  chatId,
+  title,
+  cells,
+  fileReferences,
+  e2bSessionId,
+  createdAt,
+  updatedAt,
+}: {
+  id: string;
+  chatId: string;
+  title: string;
+  cells: unknown;
+  fileReferences: string[];
+  e2bSessionId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  try {
+    await db.insert(notebookState).values({
+      id,
+      chatId,
+      title,
+      cells,
+      fileReferences,
+      e2bSessionId,
+      createdAt,
+      updatedAt,
+    });
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to save notebook state"
+    );
+  }
+}
+
+export async function updateNotebookState({
+  id,
+  cells,
+  fileReferences,
+  e2bSessionId,
+  updatedAt,
+}: {
+  id: string;
+  cells?: unknown;
+  fileReferences?: string[];
+  e2bSessionId?: string;
+  updatedAt: Date;
+}) {
+  try {
+    const updateData: Record<string, unknown> = { updatedAt };
+    if (cells !== undefined) updateData.cells = cells;
+    if (fileReferences !== undefined) updateData.fileReferences = fileReferences;
+    if (e2bSessionId !== undefined) updateData.e2bSessionId = e2bSessionId;
+
+    await db
+      .update(notebookState)
+      .set(updateData)
+      .where(eq(notebookState.id, id));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update notebook state"
+    );
+  }
+}
+
+export async function getNotebookStateByChatId({ chatId }: { chatId: string }) {
+  try {
+    return await db
+      .select()
+      .from(notebookState)
+      .where(eq(notebookState.chatId, chatId))
+      .orderBy(desc(notebookState.updatedAt));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get notebook state by chat id"
+    );
+  }
+}
+
+export async function getNotebookStateById({ id }: { id: string }) {
+  try {
+    const [notebook] = await db
+      .select()
+      .from(notebookState)
+      .where(eq(notebookState.id, id));
+    return notebook;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get notebook state by id"
     );
   }
 }

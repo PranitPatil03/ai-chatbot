@@ -171,3 +171,39 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+// File metadata for uploaded CSV/Excel files
+export const fileMetadata = pgTable("FileMetadata", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  chatId: uuid("chatId")
+    .notNull()
+    .references(() => chat.id),
+  fileName: text("fileName").notNull(),
+  fileSize: varchar("fileSize", { length: 32 }).notNull(), // Store as string for large numbers
+  fileType: varchar("fileType", { length: 128 }).notNull(),
+  blobUrl: text("blobUrl").notNull(),
+  headers: json("headers").$type<string[]>().notNull(), // Column names
+  rowCount: varchar("rowCount", { length: 32 }).notNull(), // Store as string for large numbers
+  sheetNames: json("sheetNames").$type<string[]>(), // For Excel with multiple sheets
+  encoding: varchar("encoding", { length: 32 }), // Detected encoding (e.g., 'utf-8', 'shift_jis')
+  uploadedAt: timestamp("uploadedAt").notNull(),
+  processedAt: timestamp("processedAt").notNull(),
+});
+
+export type FileMetadata = InferSelectModel<typeof fileMetadata>;
+
+// Notebook state for data analysis sessions
+export const notebookState = pgTable("NotebookState", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  chatId: uuid("chatId")
+    .notNull()
+    .references(() => chat.id),
+  title: text("title").notNull(),
+  cells: jsonb("cells").notNull(), // Array of NotebookCell objects
+  fileReferences: json("fileReferences").$type<string[]>().notNull(), // Array of FileMetadata IDs
+  e2bSessionId: varchar("e2bSessionId", { length: 128 }), // E2B sandbox session ID
+  createdAt: timestamp("createdAt").notNull(),
+  updatedAt: timestamp("updatedAt").notNull(),
+});
+
+export type NotebookState = InferSelectModel<typeof notebookState>;
